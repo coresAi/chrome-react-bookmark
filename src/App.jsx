@@ -8,11 +8,20 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState({})
   const [message, setMessage] = useState('')
+  const [version, setVersion] = useState('')
 
   useEffect(() => {
     loadCurrentTab()
     loadBookmarks()
+    loadVersion()
   }, [])
+
+  // 获取版本号
+  function loadVersion() {
+    const root = document.getElementById('root')
+    const v = root?.dataset?.version || '1.0.7'
+    setVersion(v)
+  }
 
   // 获取当前页面信息
   async function loadCurrentTab() {
@@ -192,6 +201,7 @@ function App() {
 
       <div className="popup-footer">
         <span>按 <kbd>⌘</kbd>+<kbd>J</kbd> 快速搜索</span>
+        {version && <span className="version">v{version}</span>}
       </div>
     </div>
   )
