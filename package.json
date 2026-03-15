@@ -1,13 +1,14 @@
 {
   "name": "chrome-react-bookmark",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.3",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "cp -r dist-chrome/* ../chrome-extension-updater/dist/ && echo '已复制到更新服务器'"
+    "deploy": "npm run build && node scripts/deploy.js",
+    "release": "npm run deploy && git push"
   },
   "dependencies": {
     "fuse.js": "^7.1.0",

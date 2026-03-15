@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "书签收藏夹",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "一键收藏、快捷搜索的浏览器书签插件",
   "icons": {
     "16": "icon.svg",
@@ -38,8 +38,12 @@
   ],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-script.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-script.js"
+      ],
       "run_at": "document_end"
     }
   ],
