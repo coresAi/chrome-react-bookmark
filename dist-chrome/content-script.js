@@ -155,8 +155,8 @@ function createSearchBox() {
   input.addEventListener('input', handleSearch);
   input.addEventListener('keydown', handleKeydown);
   
-  // 加载书签数据
-  loadBookmarks();
+  // 聚焦到输入框
+  setTimeout(() => input.focus(), 100);
 }
 
 // 加载书签
@@ -271,7 +271,19 @@ function toggleSearch() {
 function showSearch() {
   searchBox.classList.add('visible');
   isVisible = true;
-  searchBox.querySelector('.search-input').focus();
+  
+  // 清空搜索框
+  const input = searchBox.querySelector('.search-input');
+  input.value = '';
+  activeIndex = 0;
+  
+  // 延迟聚焦，确保 DOM 渲染完成
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 50);
+  
+  // 加载书签数据
   loadBookmarks();
 }
 
