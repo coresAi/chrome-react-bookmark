@@ -1,29 +1,43 @@
 import { useState, useEffect } from 'react'
-import { Star, Trash2, Search, ExternalLink, Check } from 'lucide-react'
+import { Star, Trash2, Search, ExternalLink, Check, Settings, LogIn, LogOut } from 'lucide-react'
 import Fuse from 'fuse.js'
+import SettingsPage from './Settings.jsx'
 import './App.css'
 
 function App() {
+  const [view, setView] = useState('main')
   const [bookmarks, setBookmarks] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState({})
   const [message, setMessage] = useState('')
   const [version, setVersion] = useState('')
+  const [loginStatus, setLoginStatus] = useState(null)
+  const [supabaseConfigured, setSupabaseConfigured] = useState(false)
 
-  useEffect(() => {
-    loadCurrentTab()
-    loadBookmarks()
-    loadVersion()
-  }, [])
-
-  // 获取版本号
   function loadVersion() {
     const root = document.getElementById('root')
     const v = root?.dataset?.version || '1.0.7'
     setVersion(v)
   }
 
-  // 获取当前页面信息
+  async function checkSupabaseConfig() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'get-supabase-config' })
+      setSupabaseConfigured(response?.configured || false)
+    } catch {
+      console.error()
+    }
+  }
+
+  async function checkLoginStatus() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'get-login-status' })
+      setLoginStatus(response?.loggedIn ? response.email : null)
+    } catch {
+      console.error()
+    }
+  }
+
   async function loadCurrentTab() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -33,7 +47,6 @@ function App() {
           title: tab.title || '未命名'
         })
         
-        // 检查是否已收藏
         const response = await chrome.runtime.sendMessage({ 
           action: 'check-bookmark', 
           url: tab.url 
@@ -43,22 +56,20 @@ function App() {
           setTimeout(() => setMessage(''), 2000)
         }
       }
-    } catch (e) {
-      console.error(e)
+    } catch {
+      console.error()
     }
   }
 
-  // 加载所有书签
   async function loadBookmarks() {
     try {
       const response = await chrome.runtime.sendMessage({ action: 'get-bookmarks' })
       setBookmarks(response || [])
-    } catch (e) {
-      console.error(e)
+    } catch {
+      console.error()
     }
   }
 
-  // 收藏当前页面
   async function addBookmark() {
     if (!currentPage.url) return
     
@@ -72,19 +83,18 @@ function App() {
       })
       
       if (response.success) {
-        setMessage('✓ 收藏成功')
+        setMessage(response.source === 'supabase' ? '✓ 已收藏到云端' : '✓ 收藏成功')
         loadBookmarks()
       } else {
         setMessage(response.message || '收藏失败')
       }
       setTimeout(() => setMessage(''), 2000)
-    } catch (e) {
+    } catch {
       setMessage('收藏失败')
       setTimeout(() => setMessage(''), 2000)
     }
   }
 
-  // 删除书签
   async function removeBookmark(url) {
     try {
       await chrome.runtime.sendMessage({
@@ -92,12 +102,11 @@ function App() {
         url
       })
       loadBookmarks()
-    } catch (e) {
-      console.error(e)
+    } catch {
+      console.error()
     }
   }
 
-  // 打开书签
   function openBookmark(url, newTab = false) {
     if (newTab) {
       chrome.tabs.create({ url })
@@ -106,7 +115,14 @@ function App() {
     }
   }
 
-  // 搜索过滤
+  useEffect(() => {
+    loadCurrentTab()
+    loadBookmarks()
+    loadVersion()
+    checkLoginStatus()
+    checkSupabaseConfig()
+  }, [])
+
   const fuse = new Fuse(bookmarks, {
     keys: ['title', 'url'],
     threshold: 0.3
@@ -118,14 +134,42 @@ function App() {
 
   const isCurrentPageBookmarked = bookmarks.some(b => b.url === currentPage.url)
 
+  if (view === 'settings') {
+    return (
+      <SettingsPage 
+        onBack={() => {
+          setView('main')
+          checkLoginStatus()
+          checkSupabaseConfig()
+        }} 
+      />
+    )
+  }
+
   return (
     <div className="popup">
       <div className="popup-header">
         <h1>书签收藏夹</h1>
-        {message && <span className="message">{message}</span>}
+        <div className="header-actions">
+          {message && <span className="message">{message}</span>}
+          <button className="icon-btn" onClick={() => setView('settings')} title="设置">
+            <Settings size={18} />
+          </button>
+        </div>
       </div>
 
-      {/* 当前页面收藏按钮 */}
+      {supabaseConfigured && (
+        <div className="login-status">
+          {loginStatus ? (
+            <span className="logged-in"><Check size={14} /> {loginStatus}</span>
+          ) : (
+            <span className="not-logged-in" onClick={() => setView('settings')}>
+              <LogIn size={14} /> 登录同步
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="current-page">
         <div className="current-info">
           <span className="current-title">{currentPage.title?.slice(0, 30)}</span>
@@ -141,7 +185,6 @@ function App() {
         </button>
       </div>
 
-      {/* 搜索框 */}
       <div className="search-box">
         <Search size={16} className="search-icon" />
         <input
@@ -152,7 +195,6 @@ function App() {
         />
       </div>
 
-      {/* 书签列表 */}
       <div className="bookmark-list">
         {filteredBookmarks.length === 0 ? (
           <div className="empty">
