@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { fuzzySearchBookmarks } from '../lib/bookmarks.js';
 import { UNFILED_FOLDER_ID } from '../lib/constants.js';
 import { sendRuntimeMessage } from '../lib/messages.js';
 
@@ -8,17 +9,85 @@ function closePopupSoon() {
   window.setTimeout(() => window.close(), 120);
 }
 
+function shortUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.hostname}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+  } catch {
+    return url;
+  }
+}
+
+function scoreHistory(query, item) {
+  const title = String(item.title ?? '').toLowerCase();
+  const url = String(item.url ?? '').toLowerCase();
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) {
+    return 0;
+  }
+  if (title.includes(trimmed)) {
+    return 100;
+  }
+  if (url.includes(trimmed)) {
+    return 70;
+  }
+  let cursor = 0;
+  for (const char of trimmed) {
+    const next = title.indexOf(char, cursor);
+    if (next === -1) {
+      return 0;
+    }
+    cursor = next + 1;
+  }
+  return 45;
+}
+
 export default function PopupApp() {
   const [state, setState] = useState(null);
   const [draft, setDraft] = useState({ title: '', url: '', note: '', folder_id: UNFILED_FOLDER_ID });
   const [newFolderName, setNewFolderName] = useState(EMPTY_FOLDER_NAME);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [historyItems, setHistoryItems] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const searchRef = useRef(null);
 
   useEffect(() => {
     refresh();
   }, []);
+
+  useEffect(() => {
+    searchRef.current?.focus();
+  }, [state]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setHistoryItems([]);
+      setSelectedIndex(0);
+      return;
+    }
+
+    let cancelled = false;
+    chrome.history.search(
+      {
+        text: searchQuery,
+        maxResults: 20,
+        startTime: Date.now() - 1000 * 60 * 60 * 24 * 30
+      },
+      (items) => {
+        if (!cancelled) {
+          setHistoryItems(items ?? []);
+          setSelectedIndex(0);
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchQuery]);
 
   async function refresh() {
     const response = await sendRuntimeMessage('GET_POPUP_STATE');
@@ -64,6 +133,41 @@ export default function PopupApp() {
   const isExisting = Boolean(state?.currentBookmark?.id);
   const canSave = draft.title.trim() && draft.url.trim();
 
+  const bookmarkResults = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return [];
+    }
+    return fuzzySearchBookmarks(state?.library?.bookmarks ?? [], folders, searchQuery)
+      .slice(0, 8)
+      .map((item) => ({
+        type: 'bookmark',
+        id: item.bookmark.id,
+        title: item.bookmark.title,
+        subtitle: item.folderLabel,
+        url: item.bookmark.url
+      }));
+  }, [folders, searchQuery, state]);
+
+  const historyResults = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return [];
+    }
+    return historyItems
+      .map((item) => ({
+        type: 'history',
+        id: item.id,
+        title: item.title || shortUrl(item.url || ''),
+        subtitle: '历史记录',
+        url: item.url || '',
+        score: scoreHistory(searchQuery, item)
+      }))
+      .filter((item) => item.url && item.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 8);
+  }, [historyItems, searchQuery]);
+
+  const searchResults = useMemo(() => [...bookmarkResults, ...historyResults].slice(0, 10), [bookmarkResults, historyResults]);
+
   async function handleCreateFolder() {
     setIsBusy(true);
     setError('');
@@ -84,6 +188,18 @@ export default function PopupApp() {
     }
   }
 
+  function openResult(result, newTab) {
+    if (!result?.url) {
+      return;
+    }
+
+    chrome.runtime.sendMessage({
+      type: 'OPEN_BOOKMARK',
+      payload: { url: result.url, newTab }
+    });
+    closePopupSoon();
+  }
+
   if (!state) {
     return <div className="popup-shell loading">正在准备收藏器...</div>;
   }
@@ -94,12 +210,60 @@ export default function PopupApp() {
         <div className="popup-top">
           <div>
             <p className="popup-eyebrow">Bookmark Flow</p>
-            <h1>{isExisting ? '编辑当前收藏' : '收藏当前页面'}</h1>
+            <h1>搜索与收藏</h1>
           </div>
           <button className="mini-link" type="button" onClick={() => sendRuntimeMessage('OPEN_EXTENSION_PAGE', { page: 'manage' })}>
             管理页
           </button>
         </div>
+
+        <section className="popup-panel search-panel">
+          <label className="search-label">
+            <span>搜索</span>
+            <input
+              ref={searchRef}
+              value={searchQuery}
+              placeholder="搜索书签和历史记录"
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (!searchResults.length) {
+                  return;
+                }
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setSelectedIndex((current) => Math.min(current + 1, searchResults.length - 1));
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setSelectedIndex((current) => Math.max(current - 1, 0));
+                } else if (event.key === 'Enter') {
+                  event.preventDefault();
+                  openResult(searchResults[selectedIndex], event.metaKey || event.ctrlKey);
+                }
+              }}
+            />
+          </label>
+          {searchQuery.trim() ? (
+            <div className="search-results">
+              {searchResults.length ? (
+                searchResults.map((item, index) => (
+                  <button
+                    key={`${item.type}-${item.id}-${index}`}
+                    className={`search-result ${selectedIndex === index ? 'is-active' : ''}`}
+                    type="button"
+                    onClick={() => openResult(item, false)}
+                  >
+                    <span className="search-main search-main--stack">
+                      <strong>{item.title}</strong>
+                      <small>{item.subtitle}</small>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="search-empty">没有匹配到书签或历史记录</div>
+              )}
+            </div>
+          ) : null}
+        </section>
 
         {(message || error) && (
           <div className={`popup-banner ${error ? 'is-error' : 'is-success'}`}>{error || message}</div>
@@ -132,7 +296,7 @@ export default function PopupApp() {
               <label>
                 <span>URL</span>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={draft.url}
                   onChange={(event) => setDraft((current) => ({ ...current, url: event.target.value }))}
                 />
@@ -163,7 +327,7 @@ export default function PopupApp() {
               <div className="new-folder-row">
                 <input
                   value={newFolderName}
-                  placeholder="在这里新建文件夹"
+                  placeholder="新建文件夹"
                   onChange={(event) => setNewFolderName(event.target.value)}
                 />
                 <button

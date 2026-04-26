@@ -353,6 +353,11 @@ async function reorderFolders({ draggedId, targetId }) {
 chrome.runtime.onInstalled.addListener(async () => {
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({
+    id: 'open-search-popup',
+    title: '打开搜索弹框',
+    contexts: ['action']
+  });
+  chrome.contextMenus.create({
     id: 'open-manage',
     title: '打开书签管理',
     contexts: ['action']
@@ -366,22 +371,14 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info) => {
+  if (info.menuItemId === 'open-search-popup') {
+    await chrome.action.openPopup();
+  }
   if (info.menuItemId === 'open-manage') {
     await chrome.tabs.create({ url: chrome.runtime.getURL('manage.html') });
   }
   if (info.menuItemId === 'open-settings') {
     await chrome.runtime.openOptionsPage();
-  }
-});
-
-chrome.commands.onCommand.addListener(async (command) => {
-  if (command !== 'toggle-search') {
-    return;
-  }
-
-  const tab = await getActiveTab();
-  if (tab?.id) {
-    await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SEARCH_OVERLAY' }).catch(() => undefined);
   }
 });
 

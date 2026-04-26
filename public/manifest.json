@@ -7,7 +7,8 @@
     "storage",
     "tabs",
     "activeTab",
-    "contextMenus"
+    "contextMenus",
+    "history"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -22,23 +23,12 @@
   },
   "options_page": "settings.html",
   "commands": {
-    "toggle-search": {
+    "_execute_action": {
       "suggested_key": {
-        "default": "Ctrl+J",
-        "mac": "Command+J"
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
       },
-      "description": "打开书签聚焦搜索"
+      "description": "打开书签与历史搜索"
     }
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ]
+  }
 }

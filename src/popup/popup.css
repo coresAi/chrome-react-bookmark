@@ -1,8 +1,8 @@
 @import "../ui/shared.css";
 
 body {
-  width: 390px;
-  min-height: 560px;
+  width: 420px;
+  min-height: 620px;
 }
 
 .popup-shell {
@@ -77,6 +77,76 @@ body {
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.56);
   border: 1px solid var(--line);
+}
+
+.search-panel {
+  margin-bottom: 12px;
+}
+
+.search-label {
+  display: grid;
+  gap: 8px;
+}
+
+.search-results {
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.search-result {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 13px;
+  background: rgba(255, 255, 255, 0.7);
+  text-align: left;
+}
+
+.search-result.is-active,
+.search-result:hover {
+  background: #17212b;
+  color: #fbf7ee;
+}
+
+.search-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.search-main strong,
+.search-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-main strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.search-main small,
+.search-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-main--stack small {
+  display: block;
+  margin-top: 1px;
+}
+
+.search-result.is-active .search-main small,
+.search-result:hover .search-main small {
+  color: rgba(251, 247, 238, 0.74);
+}
+
+.search-empty {
+  padding: 10px 2px 2px;
 }
 
 .popup-panel h2 {
