@@ -27,6 +27,11 @@ function isMissingFoldersTable(error) {
   return message.includes("could not find the table 'public.bookmark_folders'") || message.includes('bookmark_folders');
 }
 
+function isMissingNoteColumn(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes("column 'note'") || message.includes('bookmarks.note') || message.includes('schema cache');
+}
+
 async function listBookmarks(client, userId) {
   const { data, error } = await client
     .from('bookmarks')
@@ -224,6 +229,7 @@ async function upsertBookmark(bookmarkPatch) {
         ...existing,
         title: bookmarkPatch.title?.trim() || existing.title,
         url: normalizeUrl(bookmarkPatch.url?.trim() || existing.url),
+        note: bookmarkPatch.note?.trim() ?? existing.note ?? '',
         folder_id: folderId,
         updated_at: now
       }
@@ -232,6 +238,7 @@ async function upsertBookmark(bookmarkPatch) {
         user_id: userId,
         title: bookmarkPatch.title?.trim() || '未命名书签',
         url: normalizeUrl(bookmarkPatch.url?.trim() || ''),
+        note: bookmarkPatch.note?.trim() ?? '',
         folder_id: folderId,
         created_at: now,
         updated_at: now
@@ -239,6 +246,9 @@ async function upsertBookmark(bookmarkPatch) {
 
   const { data, error } = await client.from('bookmarks').upsert(bookmark).select().single();
   if (error) {
+    if (isMissingNoteColumn(error)) {
+      throw new Error('当前 `bookmarks` 表还没有 `note` 字段。请在 Supabase 执行 README 里的 `alter table ... add column note` 语句。');
+    }
     throw error;
   }
 
@@ -262,6 +272,7 @@ async function persistBookmarkPositions(bookmarks, folderId) {
     user_id: bookmark.user_id,
     title: bookmark.title,
     url: bookmark.url,
+    note: bookmark.note ?? '',
     folder_id: normalizeFolderId(folderId),
     position: index + 1,
     created_at: bookmark.created_at,
@@ -274,6 +285,9 @@ async function persistBookmarkPositions(bookmarks, folderId) {
 
   const { error } = await client.from('bookmarks').upsert(updates);
   if (error) {
+    if (isMissingNoteColumn(error)) {
+      throw new Error('当前 `bookmarks` 表还没有 `note` 字段。请在 Supabase 执行 README 里的 `alter table ... add column note` 语句。');
+    }
     throw error;
   }
 }

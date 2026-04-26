@@ -36,6 +36,7 @@ create table if not exists public.bookmarks (
   folder_id uuid references public.bookmark_folders (id) on delete set null,
   title text not null,
   url text not null,
+  note text not null default '',
   position integer not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -90,6 +91,13 @@ using (auth.uid() = user_id);
 `Could not find the table 'public.bookmark_folders' in the schema cache`
 
 通常是 Supabase 的 API schema cache 还没刷新。到 Supabase 控制台重新加载一次 API schema，或者稍等片刻再重试。
+
+如果你之前已经创建过 `bookmarks` 表但没有 `note` 字段，可以补一条：
+
+```sql
+alter table public.bookmarks
+add column if not exists note text not null default '';
+```
 
 ## 开发与构建
 

@@ -18,6 +18,7 @@ export function createBookmarkFromTab(tab, folderId = null) {
     id: crypto.randomUUID(),
     title: tab.title || tab.url || '未命名书签',
     url: normalizeUrl(tab.url || ''),
+    note: '',
     folder_id: folderId,
     position: Date.now(),
     created_at: now,
@@ -94,6 +95,7 @@ export function fuzzySearchBookmarks(bookmarks, folders, query) {
       const folderLabel = getFolderLabel(bookmark.folder_id, folders);
       const score =
         scoreText(trimmed, bookmark.title) * 2 +
+        scoreText(trimmed, bookmark.note) +
         scoreText(trimmed, bookmark.url) +
         scoreText(trimmed, folderLabel);
 

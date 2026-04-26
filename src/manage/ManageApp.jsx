@@ -1,10 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
-import { bookmarksForFolder, sortFolders } from '../lib/bookmarks.js';
-import { UNFILED_FOLDER_ID } from '../lib/constants.js';
+import { bookmarksForFolder, fuzzySearchBookmarks, sortFolders, sortBookmarks } from '../lib/bookmarks.js';
+import { ALL_BOOKMARKS_FOLDER_ID, UNFILED_FOLDER_ID } from '../lib/constants.js';
 import { sendRuntimeMessage } from '../lib/messages.js';
 
 function normalizeFolderId(folderId) {
   return folderId ?? UNFILED_FOLDER_ID;
+}
+
+function titleMatches(query, title) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedTitle = String(title ?? '').toLowerCase();
+  if (!normalizedQuery) {
+    return true;
+  }
+  if (normalizedTitle.includes(normalizedQuery)) {
+    return true;
+  }
+  let cursor = 0;
+  for (const char of normalizedQuery) {
+    const next = normalizedTitle.indexOf(char, cursor);
+    if (next === -1) {
+      return false;
+    }
+    cursor = next + 1;
+  }
+  return true;
 }
 
 function shortUrl(url) {
@@ -20,9 +40,12 @@ export default function ManageApp() {
   const [state, setState] = useState(null);
   const [selectedFolderId, setSelectedFolderId] = useState(UNFILED_FOLDER_ID);
   const [folderName, setFolderName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [editingUrlId, setEditingUrlId] = useState(null);
+  const [editingNoteId, setEditingNoteId] = useState(null);
   const [draftTitles, setDraftTitles] = useState({});
   const [draftUrls, setDraftUrls] = useState({});
+  const [draftNotes, setDraftNotes] = useState({});
   const [dragBookmarkId, setDragBookmarkId] = useState(null);
   const [dragFolderId, setDragFolderId] = useState(null);
   const [dropFolderId, setDropFolderId] = useState(null);
@@ -61,6 +84,13 @@ export default function ManageApp() {
       }
       return next;
     });
+    setDraftNotes((current) => {
+      const next = {};
+      for (const bookmark of response.library?.bookmarks ?? []) {
+        next[bookmark.id] = current[bookmark.id] ?? (bookmark.note ?? '');
+      }
+      return next;
+    });
   }
 
   async function run(action, successText) {
@@ -85,10 +115,20 @@ export default function ManageApp() {
   }
 
   const folders = useMemo(() => sortFolders(state?.library?.folders ?? []), [state]);
-  const visibleBookmarks = useMemo(
-    () => bookmarksForFolder(state?.library?.bookmarks ?? [], selectedFolderId),
-    [selectedFolderId, state]
-  );
+  const visibleBookmarks = useMemo(() => {
+    const source =
+      selectedFolderId === ALL_BOOKMARKS_FOLDER_ID
+        ? sortBookmarks(state?.library?.bookmarks ?? [])
+        : bookmarksForFolder(state?.library?.bookmarks ?? [], selectedFolderId);
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      return source;
+    }
+    if (selectedFolderId === ALL_BOOKMARKS_FOLDER_ID) {
+      return fuzzySearchBookmarks(source, folders, trimmed).map((item) => item.bookmark);
+    }
+    return source.filter((bookmark) => titleMatches(trimmed, bookmark.title));
+  }, [folders, searchQuery, selectedFolderId, state]);
 
   async function saveTitle(bookmark) {
     const nextTitle = (draftTitles[bookmark.id] ?? '').trim();
@@ -126,6 +166,25 @@ export default function ManageApp() {
     }, '链接已更新');
   }
 
+  async function saveNote(bookmark) {
+    const nextNote = draftNotes[bookmark.id] ?? '';
+    if (nextNote === (bookmark.note ?? '')) {
+      setEditingNoteId(null);
+      return;
+    }
+
+    await run(async () => {
+      const response = await sendRuntimeMessage('UPSERT_BOOKMARK', {
+        ...bookmark,
+        note: nextNote
+      });
+      if (response.ok === false) {
+        throw new Error(response.error);
+      }
+      setEditingNoteId(null);
+    }, '备注已更新');
+  }
+
   if (!state) {
     return <div className="loading-state">正在加载书签管理页...</div>;
   }
@@ -158,7 +217,7 @@ export default function ManageApp() {
       <header className="hero">
         <div>
           <p className="eyebrow">Bookmark Flow</p>
-          <h1>管理你的全部收藏，把文件夹、排序和网址都整理成顺手的资料库。</h1>
+          <h1>书签管理</h1>
         </div>
         <div className="hero-meta">
           <span>{state.session?.user?.email}</span>
@@ -200,8 +259,8 @@ export default function ManageApp() {
           </form>
 
           <div className="folder-list">
-            {[{ id: UNFILED_FOLDER_ID, name: '未分类' }, ...folders].map((folder) => {
-              const isBuiltIn = folder.id === UNFILED_FOLDER_ID;
+            {[{ id: ALL_BOOKMARKS_FOLDER_ID, name: '全部书签' }, { id: UNFILED_FOLDER_ID, name: '未分类' }, ...folders].map((folder) => {
+              const isBuiltIn = folder.id === UNFILED_FOLDER_ID || folder.id === ALL_BOOKMARKS_FOLDER_ID;
               const isActive = selectedFolderId === folder.id;
               const isDropTarget = dropFolderId === folder.id;
 
@@ -211,7 +270,7 @@ export default function ManageApp() {
                   className={`folder-row ${isActive ? 'is-active' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
                   onDragOver={(event) => {
                     event.preventDefault();
-                    if (dragBookmarkId) {
+                    if (dragBookmarkId && folder.id !== ALL_BOOKMARKS_FOLDER_ID) {
                       setDropFolderId(folder.id);
                     }
                     if (dragFolderId && dragFolderId !== folder.id) {
@@ -225,7 +284,7 @@ export default function ManageApp() {
                   }}
                   onDrop={(event) => {
                     event.preventDefault();
-                    if (dragBookmarkId) {
+                    if (dragBookmarkId && folder.id !== ALL_BOOKMARKS_FOLDER_ID) {
                       run(async () => {
                         const response = await sendRuntimeMessage('MOVE_BOOKMARK', {
                           bookmarkId: dragBookmarkId,
@@ -324,8 +383,21 @@ export default function ManageApp() {
 
         <section className="panel library-panel">
           <div className="panel-head">
-            <h2>{selectedFolderId === UNFILED_FOLDER_ID ? '未分类书签' : folders.find((item) => item.id === selectedFolderId)?.name || '书签'}</h2>
-            <p>标题保持一行可直接改，网址默认只展示可读摘要，需要时再点“编辑链接”。</p>
+            <h2>
+              {selectedFolderId === ALL_BOOKMARKS_FOLDER_ID
+                ? '全部书签'
+                : selectedFolderId === UNFILED_FOLDER_ID
+                  ? '未分类书签'
+                  : folders.find((item) => item.id === selectedFolderId)?.name || '书签'}
+            </h2>
+            <p>{selectedFolderId === ALL_BOOKMARKS_FOLDER_ID ? '搜索整个书签库。' : '按标题模糊搜索，网址默认摘要显示，需要时再展开编辑。'}</p>
+          </div>
+          <div className="library-toolbar">
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={selectedFolderId === ALL_BOOKMARKS_FOLDER_ID ? '搜索全部书签' : '搜索标题'}
+            />
           </div>
 
           <div className="bookmark-list">
@@ -426,9 +498,40 @@ export default function ManageApp() {
                           autoFocus
                         />
                       ) : (
-                        <a className="url-preview" href={bookmark.url} target="_blank" rel="noreferrer" title={bookmark.url}>
-                          {shortUrl(bookmark.url)}
-                        </a>
+                        <div className="bookmark-meta">
+                          <a className="url-preview" href={bookmark.url} target="_blank" rel="noreferrer" title={bookmark.url}>
+                            {shortUrl(bookmark.url)}
+                          </a>
+                          {editingNoteId === bookmark.id ? (
+                            <input
+                              className="note-input"
+                              value={draftNotes[bookmark.id] ?? ''}
+                              onChange={(event) =>
+                                setDraftNotes((current) => ({
+                                  ...current,
+                                  [bookmark.id]: event.target.value
+                                }))
+                              }
+                              onBlur={() => saveNote(bookmark)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.currentTarget.blur();
+                                }
+                                if (event.key === 'Escape') {
+                                  setDraftNotes((current) => ({
+                                    ...current,
+                                    [bookmark.id]: bookmark.note ?? ''
+                                  }));
+                                  setEditingNoteId(null);
+                                }
+                              }}
+                              placeholder="添加备注"
+                              autoFocus
+                            />
+                          ) : bookmark.note ? (
+                            <p className="note-preview" title={bookmark.note}>{bookmark.note}</p>
+                          ) : null}
+                        </div>
                       )}
                     </div>
 
@@ -456,6 +559,13 @@ export default function ManageApp() {
                       </select>
                       <button className="link-button" type="button" onClick={() => setEditingUrlId(isEditingUrl ? null : bookmark.id)}>
                         {isEditingUrl ? '收起链接' : '编辑链接'}
+                      </button>
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={() => setEditingNoteId(editingNoteId === bookmark.id ? null : bookmark.id)}
+                      >
+                        {editingNoteId === bookmark.id ? '收起备注' : '备注'}
                       </button>
                       <a href={bookmark.url} target="_blank" rel="noreferrer">
                         打开

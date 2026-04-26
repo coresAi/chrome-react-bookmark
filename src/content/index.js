@@ -10,6 +10,14 @@ function removeOverlay() {
   document.getElementById(ROOT_ID)?.remove();
 }
 
+function toggleOverlay() {
+  if (document.getElementById(ROOT_ID)) {
+    removeOverlay();
+  } else {
+    showOverlay();
+  }
+}
+
 function openBookmark(item, newTab) {
   if (!item?.bookmark?.url) {
     return;
@@ -255,11 +263,7 @@ function showToast(message) {
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'TOGGLE_SEARCH_OVERLAY') {
-    if (document.getElementById(ROOT_ID)) {
-      removeOverlay();
-    } else {
-      showOverlay();
-    }
+    toggleOverlay();
   }
 
   if (message.type === 'SHOW_TOAST') {
@@ -272,3 +276,30 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     latestLibrary = changes[STORAGE_KEYS.library].newValue;
   }
 });
+
+window.addEventListener(
+  'keydown',
+  (event) => {
+    const isShortcut = (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'j';
+    if (!isShortcut) {
+      return;
+    }
+
+    const target = event.target;
+    const isEditable =
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT');
+
+    if (isEditable) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    toggleOverlay();
+  },
+  true
+);

@@ -17,4 +17,5 @@ export const DEFAULT_LIBRARY = {
 
 export const DEFAULT_SESSION = null;
 
+export const ALL_BOOKMARKS_FOLDER_ID = 'all-bookmarks';
 export const UNFILED_FOLDER_ID = 'unfiled';

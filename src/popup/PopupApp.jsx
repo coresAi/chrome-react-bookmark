@@ -10,7 +10,7 @@ function closePopupSoon() {
 
 export default function PopupApp() {
   const [state, setState] = useState(null);
-  const [draft, setDraft] = useState({ title: '', url: '', folder_id: UNFILED_FOLDER_ID });
+  const [draft, setDraft] = useState({ title: '', url: '', note: '', folder_id: UNFILED_FOLDER_ID });
   const [newFolderName, setNewFolderName] = useState(EMPTY_FOLDER_NAME);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -37,6 +37,7 @@ export default function PopupApp() {
     setDraft({
       title: response.currentBookmark?.title ?? response.activeTab?.title ?? '',
       url: response.currentBookmark?.url ?? response.activeTab?.url ?? '',
+      note: response.currentBookmark?.note ?? '',
       folder_id: response.currentBookmark?.folder_id ?? UNFILED_FOLDER_ID
     });
   }
@@ -95,6 +96,9 @@ export default function PopupApp() {
             <p className="popup-eyebrow">Bookmark Flow</p>
             <h1>{isExisting ? '编辑当前收藏' : '收藏当前页面'}</h1>
           </div>
+          <button className="mini-link" type="button" onClick={() => sendRuntimeMessage('OPEN_EXTENSION_PAGE', { page: 'manage' })}>
+            管理页
+          </button>
         </div>
 
         {(message || error) && (
@@ -131,6 +135,15 @@ export default function PopupApp() {
                   rows={3}
                   value={draft.url}
                   onChange={(event) => setDraft((current) => ({ ...current, url: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>备注</span>
+                <textarea
+                  rows={2}
+                  value={draft.note}
+                  onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
+                  placeholder="可选备注"
                 />
               </label>
               <label>
@@ -175,6 +188,7 @@ export default function PopupApp() {
                       ...state.currentBookmark,
                       title: draft.title,
                       url: draft.url,
+                      note: draft.note,
                       folder_id: draft.folder_id === UNFILED_FOLDER_ID ? null : draft.folder_id,
                       id: state.currentBookmark?.id
                     });
