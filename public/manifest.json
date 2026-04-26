@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmark Flow",
+  "description": "基于 Supabase 的浏览器书签插件，一键收藏、聚焦搜索、文件夹管理与云端同步。",
+  "version": "0.1.0",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "收藏当前页面",
+    "default_popup": "popup.html"
+  },
+  "options_page": "settings.html",
+  "commands": {
+    "toggle-search": {
+      "suggested_key": {
+        "default": "Ctrl+J",
+        "mac": "Command+J"
+      },
+      "description": "打开书签聚焦搜索"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

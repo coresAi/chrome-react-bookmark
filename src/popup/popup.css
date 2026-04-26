@@ -1,0 +1,148 @@
+@import "../ui/shared.css";
+
+body {
+  width: 390px;
+  min-height: 420px;
+}
+
+.popup-shell {
+  min-height: 100vh;
+  padding: 14px;
+}
+
+.popup-shell.loading {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.popup-card {
+  background: var(--panel-strong);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 28px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+}
+
+.popup-top,
+.row-head,
+.popup-actions,
+.new-folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.popup-top {
+  margin-bottom: 14px;
+}
+
+.popup-eyebrow {
+  margin: 0;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.popup-top h1 {
+  margin: 4px 0 0;
+  font-size: 25px;
+  line-height: 1.05;
+}
+
+.popup-banner {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.64);
+  font-size: 13px;
+}
+
+.popup-banner.is-success {
+  background: rgba(20, 153, 90, 0.1);
+}
+
+.popup-banner.is-error {
+  background: rgba(195, 77, 69, 0.12);
+}
+
+.popup-panel {
+  display: grid;
+  gap: 10px;
+  padding: 15px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid var(--line);
+}
+
+.popup-panel h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.popup-panel p,
+.popup-account,
+label span {
+  color: var(--muted);
+}
+
+label {
+  display: grid;
+  gap: 8px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(22, 32, 44, 0.08);
+  font-size: 12px;
+}
+
+.status-pill.is-saved {
+  background: rgba(20, 153, 90, 0.12);
+  color: var(--accent);
+}
+
+.popup-actions {
+  margin-top: 12px;
+}
+
+.popup-actions.wide > * {
+  flex: 1;
+}
+
+.primary-popup,
+.ghost-popup,
+.danger-popup {
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.primary-popup {
+  background: var(--ink);
+  color: #fbf7ee;
+}
+
+.ghost-popup {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.danger-popup {
+  background: rgba(195, 77, 69, 0.12);
+  color: var(--danger);
+}
+
+.mini-link {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+}
