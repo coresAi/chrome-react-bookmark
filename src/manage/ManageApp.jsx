@@ -41,18 +41,12 @@ export default function ManageApp() {
   const [selectedFolderId, setSelectedFolderId] = useState(UNFILED_FOLDER_ID);
   const [folderName, setFolderName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [editingUrlId, setEditingUrlId] = useState(null);
-  const [editingNoteId, setEditingNoteId] = useState(null);
-  const [draftTitles, setDraftTitles] = useState({});
-  const [draftUrls, setDraftUrls] = useState({});
-  const [draftNotes, setDraftNotes] = useState({});
   const [dragBookmarkId, setDragBookmarkId] = useState(null);
   const [dragFolderId, setDragFolderId] = useState(null);
   const [dropFolderId, setDropFolderId] = useState(null);
   const [dropBookmarkId, setDropBookmarkId] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     refresh();
@@ -61,7 +55,7 @@ export default function ManageApp() {
   async function refresh() {
     const response = await sendRuntimeMessage('GET_STATE');
     if (response.ok === false) {
-      setError(response.error);
+      setToast({ type: 'error', text: response.error });
       setState({
         isAuthed: false,
         library: { folders: [], bookmarks: [] },
@@ -70,41 +64,21 @@ export default function ManageApp() {
       return;
     }
     setState(response);
-    setDraftTitles((current) => {
-      const next = {};
-      for (const bookmark of response.library?.bookmarks ?? []) {
-        next[bookmark.id] = current[bookmark.id] ?? bookmark.title;
-      }
-      return next;
-    });
-    setDraftUrls((current) => {
-      const next = {};
-      for (const bookmark of response.library?.bookmarks ?? []) {
-        next[bookmark.id] = current[bookmark.id] ?? bookmark.url;
-      }
-      return next;
-    });
-    setDraftNotes((current) => {
-      const next = {};
-      for (const bookmark of response.library?.bookmarks ?? []) {
-        next[bookmark.id] = current[bookmark.id] ?? (bookmark.note ?? '');
-      }
-      return next;
-    });
   }
 
   async function run(action, successText) {
     setIsBusy(true);
-    setError('');
-    setMessage('');
+    setToast(null);
     try {
       await action();
       if (successText) {
-        setMessage(successText);
+        setToast({ type: 'success', text: successText });
+        setTimeout(() => setToast(null), 2000);
       }
       await refresh();
     } catch (nextError) {
-      setError(nextError.message || '操作失败');
+      setToast({ type: 'error', text: nextError.message || '操作失败' });
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setIsBusy(false);
       setDropFolderId(null);
@@ -130,61 +104,6 @@ export default function ManageApp() {
     return source.filter((bookmark) => titleMatches(trimmed, bookmark.title));
   }, [folders, searchQuery, selectedFolderId, state]);
 
-  async function saveTitle(bookmark) {
-    const nextTitle = (draftTitles[bookmark.id] ?? '').trim();
-    if (!nextTitle || nextTitle === bookmark.title) {
-      return;
-    }
-
-    await run(async () => {
-      const response = await sendRuntimeMessage('UPSERT_BOOKMARK', {
-        ...bookmark,
-        title: nextTitle
-      });
-      if (response.ok === false) {
-        throw new Error(response.error);
-      }
-    }, '标题已更新');
-  }
-
-  async function saveUrl(bookmark) {
-    const nextUrl = (draftUrls[bookmark.id] ?? '').trim();
-    if (!nextUrl || nextUrl === bookmark.url) {
-      setEditingUrlId(null);
-      return;
-    }
-
-    await run(async () => {
-      const response = await sendRuntimeMessage('UPSERT_BOOKMARK', {
-        ...bookmark,
-        url: nextUrl
-      });
-      if (response.ok === false) {
-        throw new Error(response.error);
-      }
-      setEditingUrlId(null);
-    }, '链接已更新');
-  }
-
-  async function saveNote(bookmark) {
-    const nextNote = draftNotes[bookmark.id] ?? '';
-    if (nextNote === (bookmark.note ?? '')) {
-      setEditingNoteId(null);
-      return;
-    }
-
-    await run(async () => {
-      const response = await sendRuntimeMessage('UPSERT_BOOKMARK', {
-        ...bookmark,
-        note: nextNote
-      });
-      if (response.ok === false) {
-        throw new Error(response.error);
-      }
-      setEditingNoteId(null);
-    }, '备注已更新');
-  }
-
   if (!state) {
     return <div className="loading-state">正在加载书签管理页...</div>;
   }
@@ -192,13 +111,12 @@ export default function ManageApp() {
   if (!state.isAuthed) {
     return (
       <div className="shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Bookmark Flow</p>
-          <h1>先登录，再进入你的云端书签库。</h1>
-        </div>
-      </header>
-      {error ? <div className="banner is-error">{error}</div> : null}
+        <header className="hero">
+          <div>
+            <p className="eyebrow">Bookmark Flow</p>
+            <h1>先登录，再进入你的云端书签库。</h1>
+          </div>
+        </header>
         <section className="panel empty-hero">
           <div className="panel-head">
             <h2>还没有登录</h2>
@@ -214,170 +132,171 @@ export default function ManageApp() {
 
   return (
     <div className="shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Bookmark Flow</p>
-          <h1>书签管理</h1>
-        </div>
-        <div className="hero-meta">
-          <span>{state.session?.user?.email}</span>
-          <button className="ghost-button" type="button" onClick={() => sendRuntimeMessage('OPEN_EXTENSION_PAGE', { page: 'settings' })}>
-            设置 / 账户
-          </button>
-        </div>
-      </header>
-
-      {(message || error) && <div className={`banner ${error ? 'is-error' : 'is-success'}`}>{error || message}</div>}
-
+      {toast && <div className={`toast ${toast.type === 'error' ? 'is-error' : 'is-success'}`}>{toast.text}</div>}
       <div className="manage-layout">
         <aside className="panel sidebar">
-          <div className="panel-head">
-            <h2>文件夹</h2>
-            <p>点击切换列表，拖拽句柄调整顺序，直接把书签拖到文件夹里完成归类。</p>
-          </div>
+          <div className="sidebar-section">
+            <div className="panel-head">
+              <h2>文件夹</h2>
+              <p>点击切换列表，拖拽句柄调整顺序，直接把书签拖到文件夹里完成归类。</p>
+            </div>
 
-          <form
-            className="create-folder"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!folderName.trim()) {
-                return;
-              }
-              run(async () => {
-                const response = await sendRuntimeMessage('CREATE_FOLDER', { name: folderName });
-                if (response.ok === false) {
-                  throw new Error(response.error);
+            <form
+              className="create-folder"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!folderName.trim()) {
+                  return;
                 }
-                setFolderName('');
-              }, '文件夹已创建');
-            }}
-          >
-            <input value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="新建文件夹" />
-            <button className="primary-button" type="submit" disabled={isBusy}>
-              添加
-            </button>
-          </form>
+                run(async () => {
+                  const response = await sendRuntimeMessage('CREATE_FOLDER', { name: folderName });
+                  if (response.ok === false) {
+                    throw new Error(response.error);
+                  }
+                  setFolderName('');
+                }, '文件夹已创建');
+              }}
+            >
+              <input value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="新建文件夹" />
+              <button className="primary-button" type="submit" disabled={isBusy}>
+                添加
+              </button>
+            </form>
 
-          <div className="folder-list">
-            {[{ id: ALL_BOOKMARKS_FOLDER_ID, name: '全部书签' }, { id: UNFILED_FOLDER_ID, name: '未分类' }, ...folders].map((folder) => {
-              const isBuiltIn = folder.id === UNFILED_FOLDER_ID || folder.id === ALL_BOOKMARKS_FOLDER_ID;
-              const isActive = selectedFolderId === folder.id;
-              const isDropTarget = dropFolderId === folder.id;
+            <div className="folder-list">
+              {[{ id: ALL_BOOKMARKS_FOLDER_ID, name: '全部书签' }, { id: UNFILED_FOLDER_ID, name: '未分类' }, ...folders].map((folder) => {
+                const isBuiltIn = folder.id === UNFILED_FOLDER_ID || folder.id === ALL_BOOKMARKS_FOLDER_ID;
+                const isActive = selectedFolderId === folder.id;
+                const isDropTarget = dropFolderId === folder.id;
 
-              return (
-                <div
-                  key={folder.id}
-                  className={`folder-row ${isActive ? 'is-active' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    if (dragBookmarkId && folder.id !== ALL_BOOKMARKS_FOLDER_ID) {
-                      setDropFolderId(folder.id);
-                    }
-                    if (dragFolderId && dragFolderId !== folder.id) {
-                      setDropFolderId(folder.id);
-                    }
-                  }}
-                  onDragLeave={() => {
-                    if (dropFolderId === folder.id) {
-                      setDropFolderId(null);
-                    }
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    if (dragBookmarkId && folder.id !== ALL_BOOKMARKS_FOLDER_ID) {
-                      run(async () => {
-                        const response = await sendRuntimeMessage('MOVE_BOOKMARK', {
-                          bookmarkId: dragBookmarkId,
-                          folderId: folder.id,
-                          targetId: null
-                        });
-                        if (response.ok === false) {
-                          throw new Error(response.error);
-                        }
-                      }, '书签已移动');
-                      return;
-                    }
-
-                    if (!isBuiltIn && dragFolderId && dragFolderId !== folder.id) {
-                      run(async () => {
-                        const response = await sendRuntimeMessage('REORDER_FOLDERS', {
-                          draggedId: dragFolderId,
-                          targetId: folder.id
-                        });
-                        if (response.ok === false) {
-                          throw new Error(response.error);
-                        }
-                      }, '文件夹顺序已更新');
-                    }
-                  }}
-                >
-                  {!isBuiltIn ? (
-                    <button
-                      className="drag-handle"
-                      type="button"
-                      draggable
-                      aria-label="拖动文件夹排序"
-                      onDragStart={(event) => {
-                        event.stopPropagation();
-                        setDragFolderId(folder.id);
-                        event.dataTransfer.effectAllowed = 'move';
-                      }}
-                    >
-                      ::
-                    </button>
-                  ) : (
-                    <span className="folder-spacer" />
-                  )}
-
-                  <button className="folder-switch" type="button" onClick={() => setSelectedFolderId(folder.id)}>
-                    <span>{folder.name}</span>
-                  </button>
-
-                  {!isBuiltIn ? (
-                    <div className="folder-actions">
-                      <button
-                        className="link-button"
-                        type="button"
-                        onClick={() => {
-                          const nextName = window.prompt('重命名文件夹', folder.name);
-                          if (!nextName || nextName === folder.name) {
-                            return;
+                return (
+                  <div
+                    key={folder.id}
+                    className={`folder-row ${isActive ? 'is-active' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      if (dragBookmarkId && folder.id !== ALL_BOOKMARKS_FOLDER_ID) {
+                        setDropFolderId(folder.id);
+                      }
+                      if (dragFolderId && dragFolderId !== folder.id) {
+                        setDropFolderId(folder.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dropFolderId === folder.id) {
+                        setDropFolderId(null);
+                      }
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (dragBookmarkId && folder.id !== ALL_BOOKMARKS_FOLDER_ID) {
+                        run(async () => {
+                          const response = await sendRuntimeMessage('MOVE_BOOKMARK', {
+                            bookmarkId: dragBookmarkId,
+                            folderId: folder.id,
+                            targetId: null
+                          });
+                          if (response.ok === false) {
+                            throw new Error(response.error);
                           }
-                          run(async () => {
-                            const response = await sendRuntimeMessage('UPDATE_FOLDER', {
-                              id: folder.id,
-                              name: nextName
-                            });
-                            if (response.ok === false) {
-                              throw new Error(response.error);
-                            }
-                          }, '文件夹名称已更新');
+                        }, '书签已移动');
+                        return;
+                      }
+
+                      if (!isBuiltIn && dragFolderId && dragFolderId !== folder.id) {
+                        run(async () => {
+                          const response = await sendRuntimeMessage('REORDER_FOLDERS', {
+                            draggedId: dragFolderId,
+                            targetId: folder.id
+                          });
+                          if (response.ok === false) {
+                            throw new Error(response.error);
+                          }
+                        }, '文件夹顺序已更新');
+                      }
+                    }}
+                  >
+                    {!isBuiltIn ? (
+                      <button
+                        className="drag-handle"
+                        type="button"
+                        draggable
+                        aria-label="拖动文件夹排序"
+                        onDragStart={(event) => {
+                          event.stopPropagation();
+                          setDragFolderId(folder.id);
+                          event.dataTransfer.effectAllowed = 'move';
                         }}
                       >
-                        改名
+                        ::
                       </button>
-                      <button
-                        className="link-button danger-text"
-                        type="button"
-                        onClick={() =>
-                          run(async () => {
-                            const response = await sendRuntimeMessage('DELETE_FOLDER', { folderId: folder.id });
-                            if (response.ok === false) {
-                              throw new Error(response.error);
+                    ) : (
+                      <span className="folder-spacer" />
+                    )}
+
+                    <button className="folder-switch" type="button" onClick={() => setSelectedFolderId(folder.id)}>
+                      <span>{folder.name}</span>
+                    </button>
+
+                    {!isBuiltIn ? (
+                      <div className="folder-actions">
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => {
+                            const nextName = window.prompt('重命名文件夹', folder.name);
+                            if (!nextName || nextName === folder.name) {
+                              return;
                             }
-                            if (selectedFolderId === folder.id) {
-                              setSelectedFolderId(UNFILED_FOLDER_ID);
-                            }
-                          }, '文件夹已删除')
-                        }
-                      >
-                        删除
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                            run(async () => {
+                              const response = await sendRuntimeMessage('UPDATE_FOLDER', {
+                                id: folder.id,
+                                name: nextName
+                              });
+                              if (response.ok === false) {
+                                throw new Error(response.error);
+                              }
+                            }, '文件夹名称已更新');
+                          }}
+                        >
+                          改名
+                        </button>
+                        <button
+                          className="link-button danger-text"
+                          type="button"
+                          onClick={() =>
+                            run(async () => {
+                              const response = await sendRuntimeMessage('DELETE_FOLDER', { folderId: folder.id });
+                              if (response.ok === false) {
+                                throw new Error(response.error);
+                              }
+                              if (selectedFolderId === folder.id) {
+                                setSelectedFolderId(UNFILED_FOLDER_ID);
+                              }
+                            }, '文件夹已删除')
+                          }
+                        >
+                          删除
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="sidebar-section">
+            <div className="panel-head">
+              <h2>用户设置</h2>
+              <p>账户信息与管理。</p>
+            </div>
+            <div className="user-settings">
+              <span className="user-email">{state.session?.user?.email}</span>
+              <button className="ghost-button" type="button" onClick={() => sendRuntimeMessage('OPEN_EXTENSION_PAGE', { page: 'settings' })}>
+                设置 / 账户
+              </button>
+            </div>
           </div>
         </aside>
 
@@ -390,7 +309,7 @@ export default function ManageApp() {
                   ? '未分类书签'
                   : folders.find((item) => item.id === selectedFolderId)?.name || '书签'}
             </h2>
-            <p>{selectedFolderId === ALL_BOOKMARKS_FOLDER_ID ? '搜索整个书签库。' : '按标题模糊搜索，网址默认摘要显示，需要时再展开编辑。'}</p>
+            <p>{selectedFolderId === ALL_BOOKMARKS_FOLDER_ID ? '搜索整个书签库。' : '按标题模糊搜索。'}</p>
           </div>
           <div className="library-toolbar">
             <input
@@ -406,7 +325,6 @@ export default function ManageApp() {
             ) : (
               visibleBookmarks.map((bookmark) => {
                 const isDropTarget = dropBookmarkId === bookmark.id;
-                const isEditingUrl = editingUrlId === bookmark.id;
 
                 return (
                   <article
@@ -440,138 +358,16 @@ export default function ManageApp() {
                       }, '书签顺序已更新');
                     }}
                   >
-                    <button
-                      className="drag-handle bookmark-handle"
-                      type="button"
-                      draggable
-                      aria-label="拖动书签排序"
-                      onDragStart={(event) => {
-                        event.stopPropagation();
-                        setDragBookmarkId(bookmark.id);
-                        event.dataTransfer.effectAllowed = 'move';
-                      }}
-                    >
-                      ::
-                    </button>
-
                     <div className="bookmark-main">
-                      <input
-                        className="title-input"
-                        value={draftTitles[bookmark.id] ?? bookmark.title}
-                        onChange={(event) =>
-                          setDraftTitles((current) => ({
-                            ...current,
-                            [bookmark.id]: event.target.value
-                          }))
-                        }
-                        onBlur={() => saveTitle(bookmark)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.currentTarget.blur();
-                          }
-                        }}
-                      />
-
-                      {isEditingUrl ? (
-                        <input
-                          className="url-input"
-                          value={draftUrls[bookmark.id] ?? bookmark.url}
-                          onChange={(event) =>
-                            setDraftUrls((current) => ({
-                              ...current,
-                              [bookmark.id]: event.target.value
-                            }))
-                          }
-                          onBlur={() => saveUrl(bookmark)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.currentTarget.blur();
-                            }
-                            if (event.key === 'Escape') {
-                              setDraftUrls((current) => ({
-                                ...current,
-                                [bookmark.id]: bookmark.url
-                              }));
-                              setEditingUrlId(null);
-                            }
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <div className="bookmark-meta">
-                          <a className="url-preview" href={bookmark.url} target="_blank" rel="noreferrer" title={bookmark.url}>
-                            {shortUrl(bookmark.url)}
-                          </a>
-                          {editingNoteId === bookmark.id ? (
-                            <input
-                              className="note-input"
-                              value={draftNotes[bookmark.id] ?? ''}
-                              onChange={(event) =>
-                                setDraftNotes((current) => ({
-                                  ...current,
-                                  [bookmark.id]: event.target.value
-                                }))
-                              }
-                              onBlur={() => saveNote(bookmark)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.currentTarget.blur();
-                                }
-                                if (event.key === 'Escape') {
-                                  setDraftNotes((current) => ({
-                                    ...current,
-                                    [bookmark.id]: bookmark.note ?? ''
-                                  }));
-                                  setEditingNoteId(null);
-                                }
-                              }}
-                              placeholder="添加备注"
-                              autoFocus
-                            />
-                          ) : bookmark.note ? (
-                            <p className="note-preview" title={bookmark.note}>{bookmark.note}</p>
-                          ) : null}
-                        </div>
-                      )}
+                      <span className="bookmark-title">{bookmark.title}</span>
+                      <span className="bookmark-url" title={bookmark.url}>{shortUrl(bookmark.url)}</span>
                     </div>
-
                     <div className="bookmark-tools">
-                      <select
-                        value={normalizeFolderId(bookmark.folder_id)}
-                        onChange={(event) =>
-                          run(async () => {
-                            const response = await sendRuntimeMessage('UPSERT_BOOKMARK', {
-                              ...bookmark,
-                              folder_id: event.target.value
-                            });
-                            if (response.ok === false) {
-                              throw new Error(response.error);
-                            }
-                          }, '书签已更新')
-                        }
-                      >
-                        <option value={UNFILED_FOLDER_ID}>未分类</option>
-                        {folders.map((folder) => (
-                          <option key={folder.id} value={folder.id}>
-                            {folder.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button className="link-button" type="button" onClick={() => setEditingUrlId(isEditingUrl ? null : bookmark.id)}>
-                        {isEditingUrl ? '收起链接' : '编辑链接'}
-                      </button>
-                      <button
-                        className="link-button"
-                        type="button"
-                        onClick={() => setEditingNoteId(editingNoteId === bookmark.id ? null : bookmark.id)}
-                      >
-                        {editingNoteId === bookmark.id ? '收起备注' : '备注'}
-                      </button>
                       <a href={bookmark.url} target="_blank" rel="noreferrer">
                         打开
                       </a>
                       <button
-                        className="link-button danger-text"
+                        className="link-button"
                         type="button"
                         onClick={() =>
                           run(async () => {
