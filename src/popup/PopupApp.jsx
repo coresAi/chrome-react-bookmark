@@ -3,8 +3,6 @@ import { fuzzySearchBookmarks } from '../lib/bookmarks.js';
 import { UNFILED_FOLDER_ID } from '../lib/constants.js';
 import { sendRuntimeMessage } from '../lib/messages.js';
 
-const EMPTY_FOLDER_NAME = '';
-
 function closePopupSoon() {
   window.setTimeout(() => window.close(), 120);
 }
@@ -55,7 +53,6 @@ function scoreHistory(query, item) {
 export default function PopupApp() {
   const [state, setState] = useState(null);
   const [draft, setDraft] = useState({ title: '', url: '', note: '', folder_id: UNFILED_FOLDER_ID });
-  const [newFolderName, setNewFolderName] = useState(EMPTY_FOLDER_NAME);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
@@ -186,17 +183,21 @@ export default function PopupApp() {
   const searchResults = useMemo(() => [...bookmarkResults, ...historyResults].slice(0, 10), [bookmarkResults, historyResults]);
 
   async function handleCreateFolder() {
+    const folderName = window.prompt('新建文件夹');
+    if (!folderName?.trim()) {
+      return;
+    }
+
     setIsBusy(true);
     setError('');
     setMessage('');
     try {
-      const response = await sendRuntimeMessage('CREATE_FOLDER', { name: newFolderName });
+      const response = await sendRuntimeMessage('CREATE_FOLDER', { name: folderName });
       if (response.ok === false) {
         throw new Error(response.error);
       }
       await refresh();
       setDraft((current) => ({ ...current, folder_id: response.folder.id }));
-      setNewFolderName(EMPTY_FOLDER_NAME);
       setMessage('文件夹已创建');
     } catch (nextError) {
       setError(nextError.message || '操作失败');
@@ -342,14 +343,6 @@ export default function PopupApp() {
                 />
               </label>
               <label>
-                <span>URL</span>
-                <textarea
-                  rows={2}
-                  value={draft.url}
-                  onChange={(event) => setDraft((current) => ({ ...current, url: event.target.value }))}
-                />
-              </label>
-              <label>
                 <span>备注</span>
                 <textarea
                   rows={2}
@@ -358,35 +351,25 @@ export default function PopupApp() {
                   placeholder="可选备注"
                 />
               </label>
-              <label>
+              <label className="folder-picker">
                 <span>文件夹</span>
-                <select
-                  value={draft.folder_id ?? UNFILED_FOLDER_ID}
-                  onChange={(event) => setDraft((current) => ({ ...current, folder_id: event.target.value }))}
-                >
-                  <option value={UNFILED_FOLDER_ID}>未分类</option>
-                  {folders.map((folder) => (
-                    <option key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="folder-picker-row">
+                  <select
+                    value={draft.folder_id ?? UNFILED_FOLDER_ID}
+                    onChange={(event) => setDraft((current) => ({ ...current, folder_id: event.target.value }))}
+                  >
+                    <option value={UNFILED_FOLDER_ID}>未分类</option>
+                    {folders.map((folder) => (
+                      <option key={folder.id} value={folder.id}>
+                        {folder.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="ghost-popup folder-add-button" type="button" disabled={isBusy} onClick={handleCreateFolder}>
+                    新建
+                  </button>
+                </div>
               </label>
-              <div className="new-folder-row">
-                <input
-                  value={newFolderName}
-                  placeholder="新建文件夹"
-                  onChange={(event) => setNewFolderName(event.target.value)}
-                />
-                <button
-                  className="ghost-popup"
-                  type="button"
-                  disabled={isBusy || !newFolderName.trim()}
-                  onClick={handleCreateFolder}
-                >
-                  新建
-                </button>
-              </div>
             </section>
 
             <div className="popup-actions wide">

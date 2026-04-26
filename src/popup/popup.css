@@ -27,8 +27,7 @@ body {
 
 .popup-top,
 .row-head,
-.popup-actions,
-.new-folder-row {
+.popup-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -219,6 +218,13 @@ label {
   gap: 8px;
 }
 
+.folder-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -257,6 +263,10 @@ label {
 .ghost-popup {
   background: var(--accent-soft);
   color: var(--ink);
+}
+
+.folder-add-button {
+  padding-inline: 12px;
 }
 
 .danger-popup {
