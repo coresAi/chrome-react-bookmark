@@ -18,6 +18,16 @@ function shortUrl(url) {
   }
 }
 
+function formatHistoryTime(timestamp) {
+  const date = new Date(timestamp);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d} ${h}:${min}`;
+}
+
 function scoreHistory(query, item) {
   const title = String(item.title ?? '').toLowerCase();
   const url = String(item.url ?? '').toLowerCase();
@@ -47,20 +57,18 @@ export default function PopupApp() {
   const [draft, setDraft] = useState({ title: '', url: '', note: '', folder_id: UNFILED_FOLDER_ID });
   const [newFolderName, setNewFolderName] = useState(EMPTY_FOLDER_NAME);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('bookmarks');
   const searchRef = useRef(null);
 
   useEffect(() => {
     refresh();
   }, []);
-
-  useEffect(() => {
-    searchRef.current?.focus();
-  }, [state]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -88,6 +96,15 @@ export default function PopupApp() {
       cancelled = true;
     };
   }, [searchQuery]);
+
+  function clearSearch() {
+    setSearchQuery('');
+  }
+
+  function focusSearch() {
+    setSearchQuery('');
+    searchRef.current?.focus();
+  }
 
   async function refresh() {
     const response = await sendRuntimeMessage('GET_POPUP_STATE');
@@ -157,7 +174,7 @@ export default function PopupApp() {
         type: 'history',
         id: item.id,
         title: item.title || shortUrl(item.url || ''),
-        subtitle: '历史记录',
+        subtitle: formatHistoryTime(item.lastVisitTime),
         url: item.url || '',
         score: scoreHistory(searchQuery, item)
       }))
@@ -219,48 +236,77 @@ export default function PopupApp() {
 
         <section className="popup-panel search-panel">
           <label className="search-label">
-            <span>搜索</span>
-            <input
-              ref={searchRef}
-              value={searchQuery}
-              placeholder="搜索书签和历史记录"
-              onChange={(event) => setSearchQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (!searchResults.length) {
-                  return;
-                }
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault();
-                  setSelectedIndex((current) => Math.min(current + 1, searchResults.length - 1));
-                } else if (event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  setSelectedIndex((current) => Math.max(current - 1, 0));
-                } else if (event.key === 'Enter') {
-                  event.preventDefault();
-                  openResult(searchResults[selectedIndex], event.metaKey || event.ctrlKey);
-                }
-              }}
-            />
+            <div className="search-input-wrap">
+              <input
+                ref={searchRef}
+                value={searchQuery}
+                placeholder="搜索书签和历史记录"
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                onKeyDown={(event) => {
+                  if (!searchResults.length) {
+                    return;
+                  }
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setSelectedIndex((current) => Math.min(current + 1, searchResults.length - 1));
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setSelectedIndex((current) => Math.max(current - 1, 0));
+                  } else if (event.key === 'Enter') {
+                    event.preventDefault();
+                    openResult(searchResults[selectedIndex], event.metaKey || event.ctrlKey);
+                  }
+                }}
+              />
+              {searchQuery && (
+                <button type="button" className="search-clear" onClick={clearSearch} title="清除搜索">
+                  ×
+                </button>
+              )}
+            </div>
           </label>
           {searchQuery.trim() ? (
             <div className="search-results">
-              {searchResults.length ? (
-                searchResults.map((item, index) => (
-                  <button
-                    key={`${item.type}-${item.id}-${index}`}
-                    className={`search-result ${selectedIndex === index ? 'is-active' : ''}`}
-                    type="button"
-                    onClick={() => openResult(item, false)}
-                  >
-                    <span className="search-main search-main--stack">
-                      <strong>{item.title}</strong>
-                      <small>{item.subtitle}</small>
-                    </span>
-                  </button>
-                ))
-              ) : (
-                <div className="search-empty">没有匹配到书签或历史记录</div>
-              )}
+              <div className="search-tabs">
+                <button
+                  type="button"
+                  className={`search-tab ${activeTab === 'bookmarks' ? 'is-active' : ''}`}
+                  onClick={() => setActiveTab('bookmarks')}
+                >
+                  书签
+                </button>
+                <button
+                  type="button"
+                  className={`search-tab ${activeTab === 'history' ? 'is-active' : ''}`}
+                  onClick={() => setActiveTab('history')}
+                >
+                  历史记录
+                </button>
+              </div>
+              {(() => {
+                const items = activeTab === 'bookmarks' ? bookmarkResults : historyResults;
+                if (!items.length) {
+                  return <div className="search-empty">{activeTab === 'bookmarks' ? '没有匹配到书签' : '没有匹配到历史记录'}</div>;
+                }
+                return items.map((item, index) => {
+                  const globalIndex = searchResults.findIndex((r) => r.id === item.id && r.type === item.type);
+                  return (
+                    <button
+                      key={`${item.type}-${item.id}`}
+                      className={`search-result ${selectedIndex === globalIndex ? 'is-active' : ''}`}
+                      type="button"
+                      onClick={() => openResult(item, false)}
+                    >
+                      <span className="search-main search-main--stack">
+                        <strong>{item.title}</strong>
+                        <small>{item.subtitle}</small>
+                      </span>
+                    </button>
+                  );
+                });
+              })()}
             </div>
           ) : null}
         </section>
@@ -269,19 +315,21 @@ export default function PopupApp() {
           <div className={`popup-banner ${error ? 'is-error' : 'is-success'}`}>{error || message}</div>
         )}
 
-        {!isAuthed ? (
-          <section className="popup-panel">
-            <div className="status-pill">需要登录</div>
-            <h2>先登录，再收藏当前页面。</h2>
-            <div className="popup-actions">
-              <button className="primary-popup" type="button" onClick={() => sendRuntimeMessage('OPEN_EXTENSION_PAGE', { page: 'settings' })}>
-                去登录 / 注册
-              </button>
-            </div>
-          </section>
-        ) : (
+        {!searchFocused && (
           <>
-            <section className="popup-panel">
+            {!isAuthed ? (
+              <section className="popup-panel">
+                <div className="status-pill">需要登录</div>
+                <h2>先登录，再收藏当前页面。</h2>
+                <div className="popup-actions">
+                  <button className="primary-popup" type="button" onClick={() => sendRuntimeMessage('OPEN_EXTENSION_PAGE', { page: 'settings' })}>
+                    去登录 / 注册
+                  </button>
+                </div>
+              </section>
+            ) : (
+              <>
+                <section className="popup-panel">
               <div className="row-head">
                 <span className={`status-pill ${isExisting ? 'is-saved' : ''}`}>{isExisting ? '已收藏' : '未收藏'}</span>
                 <span className="popup-account">{state.session?.user?.email}</span>
@@ -386,6 +434,8 @@ export default function PopupApp() {
                 </button>
               ) : null}
             </div>
+          </>
+            )}
           </>
         )}
       </div>

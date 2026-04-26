@@ -29,6 +29,13 @@
         "mac": "Command+Shift+Y"
       },
       "description": "打开书签与历史搜索"
+    },
+    "focus-search": {
+      "suggested_key": {
+        "default": "Ctrl+J",
+        "mac": "Command+J"
+      },
+      "description": "聚焦搜索框"
     }
   }
 }

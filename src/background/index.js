@@ -370,6 +370,12 @@ chrome.runtime.onInstalled.addListener(async () => {
   await refreshActiveTabBadge();
 });
 
+chrome.commands.onCommand.addListener(async (name) => {
+  if (name === 'focus-search') {
+    await chrome.action.openPopup();
+  }
+});
+
 chrome.contextMenus.onClicked.addListener(async (info) => {
   if (info.menuItemId === 'open-search-popup') {
     await chrome.action.openPopup();
